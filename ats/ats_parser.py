@@ -125,37 +125,51 @@ class ATSParser:
     def save_to_db(self, data):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        # Check if a record with the same email or phone exists
-        cursor.execute('''
-            SELECT id FROM resumes WHERE email = ? OR phone = ?
-        ''', (data.get("email"), data.get("phone")))
-        result = cursor.fetchone()
+        result = self._find_existing_record(cursor, data)
         if result:
-            # Update existing record
-            cursor.execute('''
-                UPDATE resumes
-                SET name = ?, skills = ?, experience = ?
-                WHERE id = ?
-            ''', (
-                data.get("name"),
-                data.get("skills"),
-                data.get("experience"),
-                result[0]
-            ))
+            self._update_existing_record(cursor, result, data)
         else:
-            # Insert new record
-            cursor.execute('''
-                INSERT INTO resumes (name, email, phone, skills, experience)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (
-                data.get("name"),
-                data.get("email"),
-                data.get("phone"),
-                data.get("skills"),
-                data.get("experience")
-            ))
+            self._insert_new_record(cursor, data)
         conn.commit()
         conn.close()
+
+    def _find_existing_record(self, cursor, data):
+        cursor.execute('''
+            SELECT id, email FROM resumes WHERE email = ? OR phone = ?
+        ''', (data.get("email"), data.get("phone")))
+        return cursor.fetchone()
+
+    def _update_existing_record(self, cursor, result, data):
+        record_id, existing_email = result
+        update_fields = []
+        update_values = []
+        if not existing_email and data.get("email"):
+            update_fields.append("email = ?")
+            update_values.append(data.get("email"))
+        update_fields += ["name = ?", "skills = ?", "experience = ?"]
+        update_values += [
+            data.get("name"),
+            data.get("skills"),
+            data.get("experience")
+        ]
+        update_values.append(record_id)
+        cursor.execute(f'''
+            UPDATE resumes
+            SET {', '.join(update_fields)}
+            WHERE id = ?
+        ''', update_values)
+
+    def _insert_new_record(self, cursor, data):
+        cursor.execute('''
+            INSERT INTO resumes (name, email, phone, skills, experience)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (
+            data.get("name"),
+            data.get("email"),
+            data.get("phone"),
+            data.get("skills"),
+            data.get("experience")
+        ))
     
     def parse_pdf(self, pdf_path):
         if not os.path.exists(pdf_path):
