@@ -43,8 +43,26 @@ class ATSParser:
         }
 
     def _extract_email(self, text):
-        email_match = re.search(r'[\w\.-]+@[\w\.-]+', text)
-        return email_match.group(0) if email_match else None
+        # Try to find standard emails, obfuscated emails, and common patterns
+        patterns = [
+            r'[\w\.-]+@[\w\.-]+\.\w+',  # Standard email
+            r'[\w\.-]+\s*\[\s*at\s*\]\s*[\w\.-]+\s*\[\s*dot\s*\]\s*\w+',  # name [at] domain [dot] com
+            r'[\w\.-]+\s+at\s+[\w\.-]+\s+dot\s+\w+',  # name at domain dot com
+            r'[\w\.-]+\s*@\s*[\w\.-]+\s*\.\s*\w+',  # name @ domain . com (with spaces)
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                email = match.group(0)
+                # Clean up obfuscated emails
+                email = re.sub(r'\s*\[\s*at\s*\]\s*', '@', email, flags=re.IGNORECASE)
+                email = re.sub(r'\s*\[\s*dot\s*\]\s*', '.', email, flags=re.IGNORECASE)
+                email = re.sub(r'\s+at\s+', '@', email, flags=re.IGNORECASE)
+                email = re.sub(r'\s+dot\s+', '.', email, flags=re.IGNORECASE)
+                email = re.sub(r'\s*@\s*', '@', email)
+                email = re.sub(r'\s*\.\s*', '.', email)
+                return email
+        return None
 
     def _extract_phone(self, text):
         phone_match = re.search(r'(\+?\d[\d\s\-\(\)]{8,20}\d)', text)
