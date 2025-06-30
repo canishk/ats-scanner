@@ -26,7 +26,7 @@ Applicant Tracking System
 
 After installation, you can run the application as follows:
 ```bash
-python main.py
+python data_loader.py
 ```
 
 The application will process resumes and extract relevant information using the installed `en_core_web_sm` model.
