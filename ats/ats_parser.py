@@ -51,6 +51,21 @@ class ATSParser:
         return phone_match.group(0) if phone_match else None
 
     def _extract_name(self, text):
+        # Check the first few lines for a possible name (heading)
+        lines = text.strip().split('\n')
+        for i in range(min(5, len(lines))):
+            line = lines[i].strip()
+            if 2 <= len(line.split()) <= 4 and line.isalpha() or line.replace(" ", "").isalpha():
+                # Run NER on the line to confirm it's a PERSON entity
+                doc = self.nlp(line)
+                for ent in doc.ents:
+                    if ent.label_ == "PERSON":
+                        return ent.text
+                # If NER doesn't find, but line looks like a name, return it
+                if line and line[0].isupper():
+                    return line
+
+        # Fallback: use NER on the whole text
         doc = self.nlp(text)
         for ent in doc.ents:
             if ent.label_ == "PERSON":
