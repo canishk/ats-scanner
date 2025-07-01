@@ -2,13 +2,23 @@ import pdfplumber
 import sqlite3
 import re
 import os
+import json
 import spacy
+from dotenv import load_dotenv
+
+from ats.ai_prompt import get_resume_prompt
+from langchain_google_genai import GoogleGenerativeAI
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+
 
 class ATSParser:
     def __init__(self, db_path='ats.db'):
         self.db_path = db_path
         self.nlp = spacy.load("en_core_web_sm")
         self.init_db()
+        load_dotenv()
+        self.google_api_key = os.getenv("GOOGLE_API_KEY")
 
     # Initialize DB
     def init_db(self):
@@ -171,6 +181,42 @@ class ATSParser:
             data.get("experience")
         ))
     
+    # Try parsing JSON or fallback with regex
+    def clean_and_parse_json(self,response_text: str) -> dict:
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            match = re.search(r'{[\s\S]+}', response_text)
+            if match:
+                try:
+                    return json.loads(match.group())
+                except Exception:
+                    return {}
+        return {}
+
+
+    def process_resume_ai(self, resume_text:str):
+        if not self.google_api_key:
+            raise ValueError("Google API key is not set in the environment variables.")
+        
+        llm = GoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            temperature=0.2,
+            api_key=self.google_api_key
+        )
+        output_parser = JsonOutputParser()
+        prompt = get_resume_prompt(resume_text)
+        try:
+            chain = output_parser | PromptTemplate.from_template(prompt) | llm
+            response = chain.invoke(resume_text)
+            result = self.clean_and_parse_json(response)
+            if not result:
+                raise ValueError("Failed to parse the response from AI.")
+            return result
+        except Exception as e:
+            raise RuntimeError(f"AI processing failed: {e}")    
+        
+
     def parse_pdf(self, pdf_path):
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"File {pdf_path} does not exist.")
@@ -184,11 +230,15 @@ class ATSParser:
             raise ValueError("No text found in the PDF.")
         
         extracted_info = self.extract_info(text)
+        
+        if extracted_info.get("skills") is None:
+            extracted_info = self.process_resume_ai(text)
         self.save_to_db(extracted_info)
         return extracted_info
     
 # Example usage:
 if __name__ == "__main__":
+
     resumes_dir = os.path.join(os.path.dirname(__file__), "../cvs")
     parser = ATSParser()
     for filename in os.listdir(resumes_dir):
