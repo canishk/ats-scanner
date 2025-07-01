@@ -22,9 +22,9 @@ Applicant Tracking System
     python -m spacy download en_core_web_sm
     ```
 4. Configure Google Generative AI
-   ```
+
    Create an API key from the following [URL](https://aistudio.google.com/apikey)
-   ```
+
 The application will process resumes and extract relevant information using the installed `en_core_web_sm` model.
 ### Usage
 
