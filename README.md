@@ -27,21 +27,13 @@ Applicant Tracking System
 
 To enable Google Generative AI features, follow these steps:
 
-1. **Set up a Google Cloud Project:**
-    - Go to the [Google Cloud Console](https://console.cloud.google.com/).
-    - Create a new project or select an existing one.
 
-2. **Enable Generative AI API:**
-    - Navigate to **APIs & Services > Library**.
-    - Search for "Generative AI" or the specific API you intend to use (e.g., Vertex AI).
-    - Click **Enable**.
-
-3. **Generate a Gemini API Key:**
+1. **Generate a Gemini API Key:**
     - Go to the [Google AI Studio](https://aistudio.google.com/app/apikey).
     - Click **Create API Key**.
     - Copy the generated API key and save it securely.
 
-4. **Configure Credentials with a `.env` File:**
+2. **Configure Credentials with a `.env` File:**
     - Create a `.env` file in the project root and add the following line, replacing the path with your JSON key file:
         ```env
         GOOGLE_API_KEY=YOUR.API.KEY
