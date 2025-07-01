@@ -29,4 +29,7 @@ After installation, you can run the application as follows:
 python data_loader.py
 ```
 
+### Google Generative AI API Key
+Create an API key from the following [URL](https://aistudio.google.com/apikey)
+
 The application will process resumes and extract relevant information using the installed `en_core_web_sm` model.
