@@ -79,11 +79,34 @@ class ATSParser:
         return phone_match.group(0) if phone_match else None
 
     def _extract_name(self, text):
+        # Try GenAI extraction first if API key is available
+        if self.google_api_key:
+            try:
+                llm = GoogleGenerativeAI(
+                    model="gemini-2.0-flash",
+                    temperature=0.2,
+                    api_key=self.google_api_key
+                )
+                prompt = (
+                    "Extract the full name of the candidate from the following resume text. "
+                    "Return only the name as a plain string, no explanations.\n\n"
+                    f"Resume:\n{text}\n\nName:"
+                )
+                response = llm.invoke(prompt)
+                # Clean up: take only the first line, strip whitespace
+                if response:
+                    name = response.strip().split('\n')[0]
+                    # Heuristic: name should be 2-4 words, mostly alphabetic
+                    if 2 <= len(name.split()) <= 4 and all(part.isalpha() for part in name.split()):
+                        return name
+            except Exception:
+                pass  # Fallback to spaCy/heuristics below
+
         # Check the first few lines for a possible name (heading)
         lines = text.strip().split('\n')
         for i in range(min(5, len(lines))):
             line = lines[i].strip()
-            if 2 <= len(line.split()) <= 4 and line.isalpha() or line.replace(" ", "").isalpha():
+            if 2 <= len(line.split()) <= 4 and (line.isalpha() or line.replace(" ", "").isalpha()):
                 # Run NER on the line to confirm it's a PERSON entity
                 doc = self.nlp(line)
                 for ent in doc.ents:
@@ -101,22 +124,72 @@ class ATSParser:
         return None
 
     def _extract_skills(self, text):
-        skill_keywords = [
-            "python", "java", "sql", "c++", "javascript", "excel", "machine learning",
-            "data analysis", "project management", "communication", "leadership"
-        ]
-        skills_found = set()
-        text_lower = text.lower()
-        for skill in skill_keywords:
-            if skill in text_lower:
-                skills_found.add(skill)
-        return skills_found
+        """
+        Uses a GenAI model to extract all skills mentioned in the text, 
+        rather than relying on static keywords.
+        """
+        if not self.google_api_key:
+            raise ValueError("Google API key is not set in the environment variables.")
+
+        llm = GoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            temperature=0.2,
+            api_key=self.google_api_key
+        )
+        prompt = (
+            "Extract a list of all professional skills mentioned in the following resume text. "
+            "Return only a JSON array of skill strings, no explanations.\n\n"
+            f"Resume:\n{text}\n\nSkills:"
+        )
+        try:
+            response = llm.invoke(prompt)
+            # Try to parse the response as a JSON array
+            skills = []
+            try:
+                skills = json.loads(response)
+            except Exception:
+                # Fallback: extract list-like structure from response
+                match = re.search(r'\[.*\]', response, re.DOTALL)
+                if match:
+                    skills = json.loads(match.group())
+            if isinstance(skills, list):
+                return set([s.strip() for s in skills if isinstance(s, str)])
+            return set()
+        except Exception as e:
+            # Fallback: return empty set if AI fails
+            return set()
 
     def _extract_experience(self, text):
+        """
+        Uses a GenAI model to extract the candidate's work/professional experience section.
+        Falls back to regex if GenAI is unavailable or fails.
+        """
+        if self.google_api_key:
+            try:
+                llm = GoogleGenerativeAI(
+                    model="gemini-2.0-flash",
+                    temperature=0.2,
+                    api_key=self.google_api_key
+                )
+                prompt = (
+                    "Extract the entire work or professional experience section from the following resume text. "
+                    "Return only the relevant experience section as plain text, no explanations.\n\n"
+                    f"Resume:\n{text}\n\nExperience Section:"
+                )
+                response = llm.invoke(prompt)
+                # Clean up: Remove any leading/trailing whitespace or explanations
+                if response:
+                    # Heuristic: If the response is too short, fallback to regex
+                    if len(response.strip().split()) > 10:
+                        return response.strip()
+            except Exception:
+                pass  # Fallback to regex below
+
+        # Fallback: Regex-based extraction
         experience_patterns = [
-            r'(work experience[\s\S]{0,1000})',
-            r'(professional experience[\s\S]{0,1000})',
-            r'(experience[\s\S]{0,1000})'
+            r'(work experience[\s\S]{0,2000})',
+            r'(professional experience[\s\S]{0,2000})',
+            r'(experience[\s\S]{0,2000})'
         ]
         for pattern in experience_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
